@@ -34,10 +34,11 @@ async function localAPI(path,options={}){
   if(path==='/api/state')result=engineState;
   else if(path==='/api/train'){
     if(engineState.status==='training')throw Error('A training run is already in progress.');
-    const {layers}=JSON.parse(options.body);
-    engineState.status='training';engineState.progress=0;engineState.epoch=0;engineState.curve=[];
+    const {layers,epochs}=JSON.parse(options.body);
+    if(!Number.isInteger(epochs)||epochs<1||epochs>50)throw Error('Choose a whole number of epochs from 1 to 50.');
+    engineState.epochs=epochs;engineState.status='training';engineState.progress=0;engineState.epoch=0;engineState.curve=[];
     engineState.message='Starting your experiment…';
-    engine.postMessage({type:'train',layers});result={ok:true};
+    engine.postMessage({type:'train',layers,epochs});result={ok:true};
   }else if(path==='/api/predict'){
     const id=++requestId;
     result=await new Promise((resolve,reject)=>{

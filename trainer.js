@@ -27,9 +27,10 @@ function checkLayers(layers) {
   for (const l of layers) if (!Number.isInteger(l.neurons) || l.neurons < 1 || l.neurons > 256 ||
     !['relu','sigmoid','tanh'].includes(l.activation)) throw Error('Invalid layer settings.');
 }
-async function train(layers) {
+async function train(layers, epochs) {
   if (running) throw Error('Training is already running.');
   checkLayers(layers);
+  if(!Number.isInteger(epochs)||epochs<1||epochs>50)throw Error('Choose 1–50 whole epochs.');
   running = true;
   let candidate;
   progress({status:'training', progress:0, epoch:0, curve:[], message:'Preparing your experiment…'});
@@ -48,13 +49,13 @@ async function train(layers) {
     const started = performance.now();
     let round = 0;
     await candidate.fit(data.xs, data.ys, {
-      epochs:5, batchSize:32, shuffle:false, yieldEvery:100,
+      epochs, batchSize:32, shuffle:false, yieldEvery:100,
       callbacks:{
-        onEpochBegin:async epoch => {round=epoch; progress({epoch:epoch+1,message:`Training round ${epoch+1} of 5 in your browser…`});},
-        onBatchEnd:async batch => {if(batch%50===0) progress({progress:(round+(batch+1)/1563)/5});},
+        onEpochBegin:async epoch => {round=epoch; progress({epoch:epoch+1,message:`Training round ${epoch+1} of ${epochs} in your browser…`});},
+        onBatchEnd:async batch => {if(batch%50===0) progress({progress:(round+(batch+1)/1563)/epochs});},
         onEpochEnd:async (epoch, logs) => {
           curve.push({epoch:epoch+1,accuracy:logs.acc,loss:logs.loss});
-          progress({progress:(epoch+1)/5,curve:[...curve]});
+          progress({progress:(epoch+1)/epochs,curve:[...curve]});
         }
       }
     });
@@ -77,7 +78,7 @@ async function train(layers) {
           pixels:Array.from(data.bytes.subarray((base+i)*784,(base+i+1)*784))});
       }
     }
-    const result={id:Date.now(),layers,accuracy:correct/10000,correct,seconds,
+    const result={id:Date.now(),layers,epochs,accuracy:correct/10000,correct,seconds,
       parameters:candidate.countParams(),curve,examples:[...successes,...failures]};
     if(model){model.optimizer.dispose();model.dispose();}
     model=candidate;candidate=null;modelLayers=layers;
@@ -90,7 +91,7 @@ async function train(layers) {
 }
 self.onmessage=async ({data})=>{
   try {
-    if(data.type==='train'){await train(data.layers);return;}
+    if(data.type==='train'){await train(data.layers,data.epochs);return;}
     if(data.type==='predict'){
       if(running||!model)throw Error('Train a network and wait for it to finish first.');
       if(!Array.isArray(data.pixels)||data.pixels.length!==784 ||
